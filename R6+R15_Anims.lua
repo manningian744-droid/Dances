@@ -69,6 +69,7 @@ local R6Animations = {
     },
     
     Combat = {
+	[218504594] = "Realistic Punch",
         [28156406] = "punch",
         [28156501] = "punch",
         [28160593] = "uppercut",
@@ -1126,7 +1127,12 @@ local function PlayAnimation(animationId)
     local success, err = pcall(function()
         local anim = Instance.new("Animation")
         anim.AnimationId = "rbxassetid://" .. tostring(animationId)
-        local track = humanoid:LoadAnimation(anim)
+        local animator = humanoid:FindFirstChildOfClass("Animator")
+        if not animator then
+            animator = Instance.new("Animator")
+            animator.Parent = humanoid
+        end
+        local track = animator:LoadAnimation(anim)
         track:Play()
     end)
     
@@ -1168,6 +1174,7 @@ local function CreateAnimationGUI()
     }
     
     local totalAnimations = 0
+    local totalTabs = 0
     local animationButtons = {}
     
     -- Create tabs and store all animations for search
@@ -1175,6 +1182,7 @@ local function CreateAnimationGUI()
         local displayName = categoryName:gsub("_", " ")
         local tab = Window:CreateTab(displayName, tabIcons[categoryName] or 4483362458)
         tabs[categoryName] = tab
+        totalTabs = totalTabs + 1
         
         -- Create sections within the tab
         local section = tab:CreateSection(displayName)
@@ -1213,43 +1221,45 @@ local function CreateAnimationGUI()
     local SearchTab = Window:CreateTab("Search", 4483362458)
     local SearchSection = SearchTab:CreateSection("Search Animations")
     
+    local lastSearchText = ""
+
     SearchTab:CreateInput({
         Name = "Search",
         PlaceholderText = "Type animation name...",
         Callback = function(text)
-            -- Clear previous search results
-            for _, child in ipairs(SearchTab:GetChildren()) do
-                if child:IsA("Frame") and child.Name ~= "Search" and child.Name ~= "Search Animations" then
-                    child:Destroy()
-                end
-            end
-            
-            local ResultsSection = SearchTab:CreateSection("Search Results")
-            
+            -- Avoid redundant searches
+            if text == lastSearchText then return end
+            lastSearchText = text
+
             if text == "" then
-                ResultsSection:SetText("Type to search")
+                SearchTab:CreateSection("Type a name above to search animations")
                 return
             end
-            
+
             local found = 0
             local searchText = string.lower(text)
-            
+            local results = {}
+
             for _, anim in ipairs(animationButtons) do
-                if string.find(string.lower(anim.name), searchText) then
+                if string.find(string.lower(anim.name), searchText, 1, true) then
+                    table.insert(results, anim)
+                    found = found + 1
+                    if found >= 50 then break end -- cap results to avoid flooding the UI
+                end
+            end
+
+            if found == 0 then
+                SearchTab:CreateSection("No matches found for: " .. text)
+            else
+                SearchTab:CreateSection("Found " .. found .. " result(s) for: " .. text)
+                for _, anim in ipairs(results) do
                     SearchTab:CreateButton({
                         Name = anim.name .. " (" .. anim.category:gsub("_", " ") .. ")",
                         Callback = function()
                             PlayAnimation(anim.id)
                         end,
                     })
-                    found = found + 1
                 end
-            end
-            
-            if found == 0 then
-                ResultsSection:SetText("No matches found")
-            else
-                ResultsSection:SetText("Found " .. found .. " animations")
             end
         end
     })
@@ -1291,23 +1301,19 @@ local function CreateAnimationGUI()
     ControlsTab:CreateButton({
         Name = "Reload GUI",
         Callback = function()
-            Window:Destroy()
-            wait(0.5)
+            Rayfield:Destroy()
+            task.wait(0.5)
             CreateAnimationGUI()
         end,
     })
     
     -- Info
     ControlsTab:CreateLabel("Total R6 Animations: " .. totalAnimations)
-    ControlsTab:CreateLabel("Categories: " .. #tabs)
-    
-    -- Finish loading
-    Window:SetLoadingProgress(1)
-    Window:DestroyLoadingScreen()
-    
+    ControlsTab:CreateLabel("Categories: " .. totalTabs)
+
     Rayfield:Notify({
         Title = "Loaded",
-        Content = totalAnimations .. " R6 animations organized into " .. #tabs .. " tabs!",
+        Content = totalAnimations .. " R6 animations organized into " .. totalTabs .. " tabs!",
         Duration = 3,
     })
 end
